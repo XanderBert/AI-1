@@ -2,7 +2,6 @@
 from game.dino import *
 from game.agent import Agent
 
-
 class ObstaclesHelper:
 
     jump_threshold = 80
@@ -49,7 +48,7 @@ class State:
 
 
     def on_enter(self, game, obstacle):
-        self.tracked = obstacle  # fix: set as instance variable
+        self.tracked = obstacle
 
     def should_transition(self, game):
         raise NotImplementedError
@@ -72,24 +71,19 @@ class IdleState(State):
         # Jump if cactus or high obstacle
         if o.type.y >= 300 and dist < ObstaclesHelper.jump_threshold:
             MyAgent.transition_to("jump", game, o)
-            print(f"Jump over {o.type.name}")
 
         # Duck if bird AND we fit under it
         elif "BIRD" in o.type.name and dist < 150:
             if dino_duck_top > obs_bottom:
                 MyAgent.transition_to("duck", game, o)
-                print(f"Ducking under {o.type.name}")
             else:
                 # too low, must jump instead
                 MyAgent.transition_to("jump", game, o)
-                print(f"Jumping over low {o.type.name}")
-
-            
-
 
     def get_action(self, game) -> DinoMove:
+        if(game.dino.x < game.WIDTH / 3.0):
+            return DinoMove.RIGHT
         return DinoMove.NO_MOVE
-
 
 
 class JumpState(State):
@@ -101,11 +95,26 @@ class JumpState(State):
 
         # If we’re tracking an obstacle and it’s behind, maybe return to idle
         if self.tracked and ObstaclesHelper.is_behind(self.tracked, game):
-            MyAgent.transition_to("idle", game, None)
+            
+            #o = ObstaclesHelper.get_first_in_front(game)
+            #if(o and ObstaclesHelper.get_distance_from_right(o,game) > 50):
+            
+            MyAgent.transition_to("fall", game, None)
 
     def get_action(self, game) -> DinoMove:
         return DinoMove.UP_RIGHT
 
+
+class FallState(State):
+    def should_transition(self, game):
+        
+        # Go back to idle when dino lands
+        if game.dino.state == DinoState.RUNNING:
+            MyAgent.transition_to("idle", game, None)
+            return
+
+    def get_action(self, game) -> DinoMove:
+        return DinoMove.DOWN
 
 
 class DuckState(State):
@@ -115,12 +124,12 @@ class DuckState(State):
         if self.tracked and ObstaclesHelper.is_behind(self.tracked, game):
             MyAgent.transition_to("idle", game, None)
 
-        # Go back to idle when dino lands (were not tracking a object)
+        #Go back to idle when dino lands (were not tracking a object)
         if game.dino.state == DinoState.RUNNING:
             MyAgent.transition_to("idle", game, None)
 
     def get_action(self, game) -> DinoMove:
-        return DinoMove.DOWN
+        return DinoMove.DOWN_RIGHT
 
 
 
@@ -128,7 +137,8 @@ class MyAgent(Agent):
     states = {
         "idle": IdleState(),
         "jump": JumpState(),
-        "duck": DuckState()
+        "duck": DuckState(),
+        "fall": FallState()
     }
 
     current_state = states["idle"]
@@ -138,7 +148,7 @@ class MyAgent(Agent):
         if state_name in MyAgent.states:
             MyAgent.current_state = MyAgent.states[state_name]
             MyAgent.current_state.on_enter(game, obstacle)
-            print(state_name)
+            #print(state_name)
 
         
     @staticmethod
