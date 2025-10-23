@@ -22,12 +22,17 @@ class PacProblem(Problem):
         return [0,1,2,3]
 
     def result(self, state: int, action: int) -> int:
-        return 0
+        return self.game.get_neighbor(state, action)
 
     def is_goal(self, state: int) -> bool:
         return True
 
     def cost(self, state: int, action: int) -> float:
+        # also take into account: the closer to ghost the bigger the cost
+
+        self.game.ghost_locs()
+
+        self.game.get_path_distance(state, ghost_location)
         return 1
 
 
