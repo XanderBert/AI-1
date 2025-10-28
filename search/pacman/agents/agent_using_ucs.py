@@ -11,14 +11,12 @@ sys.path.append(dirname(dirname(dirname(__file__))))
 from search_templates import Problem, Solution
 from ucs import ucs
 
-epsilon = 0.1 
 
 class PacProblem(Problem):
     def __init__(self, game: Game, target_node: int = None) -> None:
         self.game: Game = game
         self.target_node: int = target_node
 
-    # --- Other Problem methods (initial_state, actions, result, is_goal) remain as they were ---
     def initial_state(self):
         return (self.game.pac_loc)
     
@@ -41,92 +39,82 @@ class PacProblem(Problem):
             return False 
         return state == self.target_node 
     
-    # --- OPTIMIZED COST FUNCTION ---
     def cost(self, state, action: int) -> float:
-        loc = state
-        next_loc = self.game.get_neighbor(loc, action)
-        BASE_COST = 1.0  # Base cost of moving one step
-
-        danger_cost = 0.0
-        ghost_reward = 0.0
+        current_location = state
+        next_loc = self.game.get_neighbor(current_location, action)
         
-        # Determine the immediate threat or opportunity
-        min_dangerous_distance = float("inf")
-        
+        COST = 100.0  # base movement cost
+    
         for g in range(self.game.NUM_GHOSTS):
             ghost_loc = self.game.get_ghost_loc(g)
-            distance = self.game.get_path_distance(next_loc, ghost_loc)
-
-            if distance == -1 or distance == 0:
-                continue # Ignore invalid distances
+    
+            current_distance = self.game.get_path_distance(current_location, ghost_loc)
+            next_distance = self.game.get_path_distance(next_loc, ghost_loc)
+    
+            if current_distance <= 0 or next_distance <= 0:
+                continue
             
-            if self.game.is_edible(g):
-                # 1. EAT REWARD: If we can eat the ghost on this move, give a massive reward.
-                if distance <= self.game.EAT_DISTANCE:
-                    # Give an extremely high negative cost (reward)
-                    ghost_reward -= 50000.0 
-            else:
-                # 2. FLEE PENALTY: Track the closest dangerous ghost
-                min_dangerous_distance = min(min_dangerous_distance, distance)
+            moving_closer = next_distance < current_distance
+    
+            # Inverse distance weighting: closer ghosts have bigger effect
+            danger_weight = max(0.1, 10 / current_distance)
+    
+            if moving_closer:
+                if self.game.is_edible(g):
+                    COST -= 50 * danger_weight
+                elif current_distance < 18:
+                    COST += 500 * danger_weight
 
-
-
-        # --- Combine Costs ---
-        total = BASE_COST + danger_cost + ghost_reward
-
-        return max(total, BASE_COST)
-
-
-
-
+        return max(COST, 0)
+    
+    
+    
+    
 class Agent_Using_UCS(PacManControllerBase):
     last_dir = Direction.NONE
 
     def tick(self, game: Game) -> None:
         current = game.pac_loc
-        
-      
-        
         targets = []
 
-        # Collect all pill locations
+        # --- Collect all targets ---
         targets.extend(game.get_active_pills_nodes())
         targets.extend(game.get_active_power_pills_nodes())
 
-        # Check for edible ghosts
-        is_power_pill_active = any(game.is_edible(g) for g in range(game.NUM_GHOSTS))
+        # Add edible ghosts as possible targets
+        for g in range(game.NUM_GHOSTS):
+            if game.is_edible(g):
+                targets.append(game.get_ghost_loc(g))
 
-        if is_power_pill_active:
-            edible_ghost_locs = [
-                game.get_ghost_loc(g) 
-                for g in range(game.NUM_GHOSTS) 
-                if game.is_edible(g)
-            ]
-            targets.extend(edible_ghost_locs)
-
+        # Fallback if no targets left
         if not targets:
             targets.append(game.get_initial_pacman_position())
 
 
-        nearest_target = game.get_target(current, targets, True, DM.PATH)
+        # Limit search to N nearest pills by raw distance
+        N = 3
+        targets = sorted(targets, key=lambda t: game.get_path_distance(current, t))[:N]
 
 
-        # 2. Final check and UCS execution
-        if nearest_target is None:
-             return
-            
-        prob = PacProblem(game, target_node=nearest_target)
-        sol = ucs(prob)
+        # --- Evaluate all targets with UCS ---
+        best_sol = None
+        best_cost = float("inf")
 
-        # 3. Execute the move
-        if sol and sol.actions:
-            self.pacman.set(sol.actions[0])
-            self.last_dir = sol.actions[0] 
+        for target in targets:
+            prob = PacProblem(game, target_node=target)
+            sol = ucs(prob)
+            if sol is not None and sol.path_cost < best_cost:
+                best_sol = sol
+                best_cost = sol.path_cost
+
+        # --- Execute best action ---
+        if best_sol and best_sol.actions:
+            self.pacman.set(best_sol.actions[0])
+            self.last_dir = best_sol.actions[0]
         else:
-            # Fallback to the last successful direction or a legal turn
+            # fallback behavior if UCS fails
             legal_dirs = game.get_possible_pacman_dirs(include_reverse=False)
             if self.last_dir in legal_dirs:
                 self.pacman.set(self.last_dir)
             elif legal_dirs:
                 self.pacman.set(legal_dirs[0])
-   

@@ -55,7 +55,6 @@ def ucs(prob: Problem) -> Optional[Solution]:
 
 
     if destination_node is None:
-        print("Did not found UCS path")
         return None # No solution found
 
 
