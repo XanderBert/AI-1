@@ -6,9 +6,8 @@ import heapq
 
 def ucs(prob: Problem) -> Optional[Solution]:
     """Return Solution of the problem solved by UCS search."""
-    
     initial_state = prob.initial_state()
-    
+ 
     # {state: (parent_state, action_to_reach_state, minimum_path_cost)}
     parent_map = {} 
     parent_map[initial_state] = (None, None, 0.0)
@@ -19,7 +18,6 @@ def ucs(prob: Problem) -> Optional[Solution]:
     destination_node = None
 
     while open_list:
-
         # Get the node with the LOWEST path cost using heap pop
         current_cost, current_state = heapq.heappop(open_list)
 
@@ -33,7 +31,7 @@ def ucs(prob: Problem) -> Optional[Solution]:
         if prob.is_goal(current_state):
             destination_node = current_state
             break
-
+  
         # Check all available actions
         for action in prob.actions(current_state):
             
@@ -45,7 +43,6 @@ def ucs(prob: Problem) -> Optional[Solution]:
             # Check if this state has not been visited OR if we found a cheaper path
             # to this state
             existing_cost = parent_map.get(next_state, (None, None, float('inf')))[2]
-            
             if new_path_cost < existing_cost: 
 
                 # Store the *new, cheaper* path info
@@ -53,10 +50,12 @@ def ucs(prob: Problem) -> Optional[Solution]:
                 
                 # Add the state with the new, lower cost to the priority queue
                 heapq.heappush(open_list, (new_path_cost, next_state))
+                
 
 
 
     if destination_node is None:
+        print("Did not found UCS path")
         return None # No solution found
 
 
